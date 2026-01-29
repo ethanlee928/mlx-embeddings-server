@@ -80,7 +80,7 @@ def get_embeddings(inputs: List[str]) -> List[List[List[float]]]:
                 image_indices.append(idx)
                 image_inputs_list.append(img)
                 is_img = True
-                logger.info(f"Input {idx} detected as image.")
+                logger.info(f"Input {idx} detected as an image.")
             except Exception as e:
                 logger.warning(f"Failed to load image input {idx}: {e}")
 

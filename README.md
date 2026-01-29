@@ -22,7 +22,7 @@ Start the server by specifying the model:
 
 ```bash
 uv run mlx-embeddings-server --model qnguyen3/colqwen2.5-v0.2-mlx --host 0.0.0.0 --port 8888
-# OR
+# or
 uv run python -m mlx_embeddings_server.main --model qnguyen3/colqwen2.5-v0.2-mlx --host 0.0.0.0 --port 8888
 ```
 
@@ -40,7 +40,7 @@ The server provides an OpenAI-compatible `POST /v1/embeddings` endpoint.
 curl http://localhost:8888/v1/embeddings \
   -H "Content-Type: application/json" \
   -d '{
-    "input": "How many percent of data are books?",
+    "input": "What percentage of the data is books?",
     "model": "qnguyen3/colqwen2.5-v0.2-mlx"
   }'
 ```
@@ -65,6 +65,30 @@ The response `embedding` field will be a **list of vectors** (e.g., `[[0.1, ...]
 ```bash
 curl http://localhost:8888/health
 ```
+
+## Examples
+
+### ColQwen2.5 with Qdrant
+
+- Start Qdrant:
+
+  ```bash
+  ./scripts/qdrant-docker.sh
+  ```
+
+- Run the example. By default, it will embed the images in the [`images`](images/) directory:
+
+  ```bash
+  uv run python examples/colqwen2.5_qdrant.py
+  ```
+
+  View the collection on Qdrant's UI at [http://localhost:6333/collections](http://localhost:6333/collections).
+
+- Stop Qdrant:
+
+  ```bash
+  docker stop qdrant
+  ```
 
 ## Test cases
 

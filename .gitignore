@@ -76,3 +76,6 @@ weights/
 
 # Ruff
 .ruff_cache/
+
+# qdrant
+qdrant_storage/

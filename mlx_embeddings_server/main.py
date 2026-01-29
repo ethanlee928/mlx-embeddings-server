@@ -1,7 +1,6 @@
 import argparse
 import logging
 import os
-import sys
 from contextlib import asynccontextmanager
 from time import monotonic
 
@@ -55,9 +54,7 @@ async def create_embeddings(request: EmbeddingRequest):
     for i, embed in enumerate(embeddings):
         data.append(EmbeddingObject(index=i, embedding=embed))
 
-    return EmbeddingResponse(
-        data=data, model=loaded_model_id, usage=Usage(prompt_tokens=0, total_tokens=0)
-    )
+    return EmbeddingResponse(data=data, model=loaded_model_id, usage=Usage(prompt_tokens=0, total_tokens=0))
 
 
 @app.get("/health")
