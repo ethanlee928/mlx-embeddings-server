@@ -68,3 +68,62 @@ Format code:
 uv run ruff format .
 uv run ruff check --fix .
 ```
+
+## References
+
+- [`mlx-vlm`](https://github.com/Blaizzy/mlx-vlm)
+- [`mlx-embeddings`](https://github.com/Blaizzy/mlx-embeddings)
+- [OpenAI Embeddings API](https://platform.openai.com/docs/api-reference/embeddings)
+  
+  Embedding API:
+
+  ```bash
+  curl https://api.openai.com/v1/embeddings \
+    -H "Authorization: Bearer $OPENAI_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "input": "The food was delicious and the waiter...",
+      "model": "text-embedding-ada-002",
+      "encoding_format": "float"
+    }'
+  ```
+
+  Response:
+
+  ```json
+  {
+    "object": "list",
+    "data": [
+      {
+        "object": "embedding",
+        "embedding": [
+          0.0023064255,
+          -0.009327292,
+          .... (1536 floats total for ada-002)
+          -0.0028842222,
+        ],
+        "index": 0
+      }
+    ],
+    "model": "text-embedding-ada-002",
+    "usage": {
+      "prompt_tokens": 8,
+      "total_tokens": 8
+    }
+  }
+  ```
+
+  Embedding Object:
+
+  ```json
+  {
+    "object": "embedding",
+    "embedding": [
+      0.0023064255,
+      -0.009327292,
+      .... (1536 floats total for ada-002)
+      -0.0028842222,
+    ],
+    "index": 0
+  }
+  ```
