@@ -1,6 +1,7 @@
 import base64
 import io
 import logging
+import os
 from typing import Any, List
 
 import mlx.core as mx
@@ -10,16 +11,18 @@ from PIL import Image
 
 logger = logging.getLogger("uvicorn.error")
 
-MODEL_ID = "qnguyen3/colqwen2.5-v0.2-mlx"
-
 
 class ModelManager:
     _instance = None
 
     def __init__(self):
-        logger.info(f"Loading model: {MODEL_ID}")
-        self.model, self.processor = load(MODEL_ID)
-        logger.info(f"Loading model: {MODEL_ID} [COMPLETED]")
+        self.model_id = os.getenv("MODEL_ID")
+        if not self.model_id:
+            raise ValueError("MODEL_ID environment variable is not set. Please specify the model to load.")
+
+        logger.info(f"Loading model: {self.model_id}")
+        self.model, self.processor = load(self.model_id)
+        logger.info(f"Loading model: {self.model_id} [COMPLETED]")
 
     @classmethod
     def get_instance(cls):

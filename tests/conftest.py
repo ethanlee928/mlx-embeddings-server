@@ -12,7 +12,9 @@ def client():
     with patch("mlx_embeddings_server.main.ModelManager") as MockManager:
         # Configure the mock to return a dummy instance if needed,
         # though lifespan only calls get_instance()
-        MockManager.get_instance.return_value = MagicMock()
+        mock_instance = MagicMock()
+        mock_instance.model_id = "colqwen2.5"
+        MockManager.get_instance.return_value = mock_instance
 
         with TestClient(app) as c:
             yield c

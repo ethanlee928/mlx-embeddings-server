@@ -73,3 +73,10 @@ def test_backend_exception_handling(client):
         response = client.post("/v1/embeddings", json=payload)
         assert response.status_code == 500
         assert "Model failure" in response.json()["detail"]
+
+
+def test_create_embedding_model_not_found(client):
+    payload = {"input": "test", "model": "wrong-model"}
+    response = client.post("/v1/embeddings", json=payload)
+    assert response.status_code == 404
+    assert "Model 'wrong-model' not found" in response.json()["detail"]

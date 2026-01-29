@@ -949,7 +949,7 @@ dependencies = [
 [[package]]
 name = "mlx-embeddings-server"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "colpali-engine" },
     { name = "fastapi" },

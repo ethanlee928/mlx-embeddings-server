@@ -18,6 +18,16 @@ dependencies = [
     "colpali-engine==0.3.13"
 ]
 
+[project.scripts]
+mlx-embeddings-server = "mlx_embeddings_server.main:start"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.uv]
 override-dependencies = [
   "transformers==4.57.6",   # for colpali-engine

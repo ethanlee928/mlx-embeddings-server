@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 class EmbeddingRequest(BaseModel):
     input: Union[str, List[str]] = Field(..., description="The input text(s) or image URL(s) to embed.")
-    model: Optional[str] = Field("qnguyen3/colqwen2.5-v0.2-mlx", description="The model ID.")
+    model: Optional[str] = Field(None, description="The model ID.")
     encoding_format: Optional[str] = Field("float", description="Format of the embeddings (float or base64).")
     user: Optional[str] = None
 

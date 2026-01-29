@@ -18,15 +18,21 @@ uv sync --group dev
 
 ### Start the Server
 
+Start the server by specifying the model:
+
 ```bash
-uv run uvicorn mlx_embeddings_server.main:app --host 0.0.0.0 --port 8888
+uv run mlx-embeddings-server --model qnguyen3/colqwen2.5-v0.2-mlx --host 0.0.0.0 --port 8888
+# OR
+uv run python -m mlx_embeddings_server.main --model qnguyen3/colqwen2.5-v0.2-mlx --host 0.0.0.0 --port 8888
 ```
 
-The server will load the `qnguyen3/colqwen2.5-v0.2-mlx` model on startup (this may take a moment).
+**Note**: The server requires the `--model` argument to start. It acts as an OpenAI-compatible server.
 
 ### API Usage
 
 The server provides an OpenAI-compatible `POST /v1/embeddings` endpoint.
+
+**Important**: The `model` field in the request must match the model ID specified when starting the server.
 
 #### Text Embedding
 
@@ -35,7 +41,7 @@ curl http://localhost:8888/v1/embeddings \
   -H "Content-Type: application/json" \
   -d '{
     "input": "How many percent of data are books?",
-    "model": "colqwen2.5"
+    "model": "qnguyen3/colqwen2.5-v0.2-mlx"
   }'
 ```
 
@@ -48,7 +54,7 @@ curl http://localhost:8888/v1/embeddings \
   -H "Content-Type: application/json" \
   -d '{
     "input": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/US_Declaration_in_Stone.jpg/440px-US_Declaration_in_Stone.jpg",
-    "model": "colqwen2.5"
+    "model": "qnguyen3/colqwen2.5-v0.2-mlx"
   }'
 ```
 
