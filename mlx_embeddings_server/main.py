@@ -1,7 +1,10 @@
+import logging
 from contextlib import asynccontextmanager
+from time import monotonic
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from fastapi.concurrency import run_in_threadpool
 
 from mlx_embeddings_server.backend import ModelManager, get_embeddings
 from mlx_embeddings_server.schemas import (
@@ -11,10 +14,11 @@ from mlx_embeddings_server.schemas import (
     Usage,
 )
 
+logger = logging.getLogger("uvicorn.error")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Load model on startup
     ModelManager.get_instance()
     yield
 
@@ -29,18 +33,13 @@ async def create_embeddings(request: EmbeddingRequest):
         inputs = [inputs]
 
     try:
-        # We invoke the blocking MLX code.
-        # In a production async server, heavy MLX/Torch compute should be offloaded to a threadpool
-        # or separate process to avoid blocking the event loop.
-        # For simplicity in this `uv` setup, we run it directly,
-        # but wrapping in `fastapi.concurrency.run_in_threadpool` is better practice.
-        from fastapi.concurrency import run_in_threadpool
-
+        t1 = monotonic()
+        logger.info(f"Processing {len(inputs)} inputs for embeddings")
         embeddings = await run_in_threadpool(get_embeddings, inputs)
+        t2 = monotonic()
+        logger.info(f"Processing {len(inputs)} inputs for embeddings [COMPLETED in {(t2 - t1) * 1000:.2f} ms]")
     except Exception as e:
-        import traceback
-
-        traceback.print_exc()
+        logger.exception("Error processing embeddings")
         raise HTTPException(status_code=500, detail=str(e))
 
     data = []
@@ -58,4 +57,4 @@ async def health():
 
 
 if __name__ == "__main__":
-    uvicorn.run("mlx_embeddings_server.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("mlx_embeddings_server.main:app", host="0.0.0.0", port=8888, reload=True)

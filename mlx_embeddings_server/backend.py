@@ -1,11 +1,14 @@
 import base64
 import io
+import logging
 from typing import Any, List
 
 import mlx.core as mx
 import requests
 from mlx_embeddings.utils import load
 from PIL import Image
+
+logger = logging.getLogger("uvicorn.error")
 
 MODEL_ID = "qnguyen3/colqwen2.5-v0.2-mlx"
 
@@ -14,9 +17,9 @@ class ModelManager:
     _instance = None
 
     def __init__(self):
-        print(f"Loading model: {MODEL_ID}")
+        logger.info(f"Loading model: {MODEL_ID}")
         self.model, self.processor = load(MODEL_ID)
-        print("Model loaded.")
+        logger.info(f"Loading model: {MODEL_ID} [COMPLETED]")
 
     @classmethod
     def get_instance(cls):
@@ -49,8 +52,8 @@ def load_image(image_str: str) -> Image.Image:
         try:
             data = base64.b64decode(image_str)
             return Image.open(io.BytesIO(data)).convert("RGB")
-        except Exception:
-            raise ValueError("Could not decode image.")
+        except Exception as e:
+            raise ValueError(f"Could not decode image: {e}")
 
 
 def get_embeddings(inputs: List[str]) -> List[List[List[float]]]:
@@ -68,18 +71,17 @@ def get_embeddings(inputs: List[str]) -> List[List[List[float]]]:
 
     for idx, inp in enumerate(inputs):
         is_img = False
-        # Try to interpret as image if it looks like one
         if is_url(inp) or is_base64_image(inp):
             try:
                 img = load_image(inp)
                 image_indices.append(idx)
                 image_inputs_list.append(img)
                 is_img = True
-            except Exception:
-                pass
+                logger.info(f"Input {idx} detected as image.")
+            except Exception as e:
+                logger.warning(f"Failed to load image input {idx}: {e}")
 
         if not is_img:
-            # If not a recognized image, treat as text
             text_indices.append(idx)
             text_inputs_list.append(inp)
 
@@ -89,7 +91,6 @@ def get_embeddings(inputs: List[str]) -> List[List[List[float]]]:
         text_input_ids = mx.array(text_inputs_proc.input_ids)
 
         proc_out = model(input_ids=text_input_ids)
-        # proc_out.text_embeds is mx.array
         embeds_list = proc_out.text_embeds.tolist()
 
         for i, embed in zip(text_indices, embeds_list):

@@ -54,6 +54,12 @@ curl http://localhost:8888/v1/embeddings \
 
 The response `embedding` field will be a **list of vectors** (e.g., `[[0.1, ...], [0.5, ...]]`) because ColQwen/ColBERT is a multi-vector model.
 
+#### Health Check
+
+```bash
+curl http://localhost:8888/health
+```
+
 ## Formatting
 
 Format code:
