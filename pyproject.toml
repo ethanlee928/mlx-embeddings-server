@@ -39,6 +39,7 @@ dev = [
     "pytest",
     "httpx>=0.28.1",
     "qdrant-client",
+    "testcontainers>=4.14.0",
 ]
 
 [tool.ruff]
