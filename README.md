@@ -60,6 +60,14 @@ The response `embedding` field will be a **list of vectors** (e.g., `[[0.1, ...]
 curl http://localhost:8888/health
 ```
 
+## Test cases
+
+Run tests:
+
+```bash
+uv run python -m pytest -v
+```
+
 ## Formatting
 
 Format code:
