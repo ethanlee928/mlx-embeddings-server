@@ -36,6 +36,8 @@ The server provides an OpenAI-compatible `POST /v1/embeddings` endpoint.
 
 #### Text Embedding
 
+curl http://localhost:8888/v1/models
+
 ```bash
 curl http://localhost:8888/v1/embeddings \
   -H "Content-Type: application/json" \
@@ -111,6 +113,7 @@ uv run ruff check --fix .
 
 - [`mlx-vlm`](https://github.com/Blaizzy/mlx-vlm)
 - [`mlx-embeddings`](https://github.com/Blaizzy/mlx-embeddings)
+- [OpenAI Models API](https://platform.openai.com/docs/api-reference/models)
 - [OpenAI Embeddings API](https://platform.openai.com/docs/api-reference/embeddings)
   
   Embedding API:

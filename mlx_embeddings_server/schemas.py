@@ -1,3 +1,4 @@
+import time
 from typing import List, Optional, Union
 
 from pydantic import BaseModel, Field
@@ -27,3 +28,15 @@ class EmbeddingResponse(BaseModel):
     data: List[EmbeddingObject]
     model: str
     usage: Usage
+
+
+class ModelObject(BaseModel):
+    id: str
+    object: str = "model"
+    created: int = Field(default_factory=lambda: int(time.time()))
+    owned_by: str = "mlx-embeddings-server"
+
+
+class ModelListResponse(BaseModel):
+    object: str = "list"
+    data: List[ModelObject]

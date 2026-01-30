@@ -13,6 +13,8 @@ from mlx_embeddings_server.schemas import (
     EmbeddingObject,
     EmbeddingRequest,
     EmbeddingResponse,
+    ModelListResponse,
+    ModelObject,
     Usage,
 )
 
@@ -26,6 +28,36 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="MLX Embeddings Server", lifespan=lifespan)
+
+
+@app.get("/v1/models", response_model=ModelListResponse)
+async def list_models():
+    # Get the currently loaded model ID from the backend singleton
+    loaded_model_id = ModelManager.get_instance().model_id
+
+    return ModelListResponse(
+        data=[
+            ModelObject(
+                id=loaded_model_id,
+                owned_by="mlx-embeddings-server",
+            )
+        ]
+    )
+
+
+@app.get("/v1/models/{model_id}", response_model=ModelObject)
+async def retrieve_model(model_id: str):
+    loaded_model_id = ModelManager.get_instance().model_id
+
+    if model_id != loaded_model_id:
+        raise HTTPException(
+            status_code=404, detail=f"Model '{model_id}' not found. Loaded model is '{loaded_model_id}'."
+        )
+
+    return ModelObject(
+        id=loaded_model_id,
+        owned_by="mlx-embeddings-server",
+    )
 
 
 @app.post("/v1/embeddings", response_model=EmbeddingResponse)
