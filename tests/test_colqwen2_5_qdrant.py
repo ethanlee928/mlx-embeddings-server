@@ -119,3 +119,78 @@ def test_end_to_end_search(qdrant_client_fixture, e2e_client):
     assert top_result.payload["filename"] == "cats.jpg"
     # Score should be relatively high for a good match
     assert top_result.score > 0.0, "Score should be positive"
+
+
+def test_end_to_end_image_search(qdrant_client_fixture, e2e_client):
+    """
+    E2E Test for Image-to-Image Search:
+    1. Create MultiVector collection in Qdrant.
+    2. Index 'cats.jpg' and 'desktop_setup.png'.
+    3. Query with 'cats.jpg' image.
+    4. Assert 'cats.jpg' is returned with a high score.
+    """
+    # 1. Cleanup Collection if exists
+    if qdrant_client_fixture.collection_exists(COLLECTION_NAME):
+        qdrant_client_fixture.delete_collection(COLLECTION_NAME)
+
+    # 2. Create Collection
+    qdrant_client_fixture.create_collection(
+        collection_name=COLLECTION_NAME,
+        vectors_config=models.VectorParams(
+            size=VECTOR_SIZE,
+            distance=models.Distance.COSINE,
+            multivector_config=models.MultiVectorConfig(comparator=models.MultiVectorComparator.MAX_SIM),
+        ),
+    )
+
+    # 3. Prepare Data
+    repo_root = pathlib.Path(__file__).parent.parent
+    images_dir = repo_root / "images"
+    assert images_dir.exists(), f"Images directory not found at {images_dir}"
+
+    cats_02_path = images_dir / "cats-02.jpg"
+    assert cats_02_path.exists(), f"Query image not found at {cats_02_path}"
+
+    # 4. Index Images
+    # Helper function to embed and upsert
+    def index_image(path, idx):
+        uri = encode_image_to_base64(str(path))
+        fname = path.name
+        resp = e2e_client.post("/v1/embeddings", json={"input": [uri], "model": MODEL_NAME})
+        assert resp.status_code == 200, f"Embedding API failed for {fname}: {resp.text}"
+        emb = resp.json()["data"][0]["embedding"]
+        qdrant_client_fixture.upsert(
+            collection_name=COLLECTION_NAME,
+            points=[models.PointStruct(id=idx, vector=emb, payload={"filename": fname})],
+        )
+
+    # Index all images except cats-02.jpg
+    image_files = [
+        f for f in images_dir.iterdir() if f.suffix.lower() in [".jpg", ".jpeg", ".png"] and f.name != "cats-02.jpg"
+    ]
+    for i, img_path in enumerate(image_files, start=1):
+        index_image(img_path, i)
+
+    # 5. Search with Image
+    # We query using the second cats image
+    cats_02_uri = encode_image_to_base64(str(cats_02_path))
+    resp_query = e2e_client.post("/v1/embeddings", json={"input": [cats_02_uri], "model": MODEL_NAME})
+    assert resp_query.status_code == 200, f"Query embedding failed: {resp_query.text}"
+
+    query_emb = resp_query.json()["data"][0]["embedding"]
+
+    # Query Qdrant - get all results to print all scores
+    search_result = qdrant_client_fixture.query_points(
+        collection_name=COLLECTION_NAME, query=query_emb, limit=len(image_files)
+    )
+
+    assert len(search_result.points) > 0, "No results found"
+
+    print("\nSearch results for cats-02.jpg:")
+    for hit in search_result.points:
+        print(f"- {hit.payload['filename']}: {hit.score:.4f}")
+
+    top_result = search_result.points[0]
+    assert top_result.payload["filename"] == "cats.jpg"
+    # Score should still be high as it's a similar image
+    assert top_result.score > 0.0, f"Score should be positive, got {top_result.score}"
