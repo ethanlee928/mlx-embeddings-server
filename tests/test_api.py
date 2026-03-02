@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
@@ -9,56 +9,53 @@ def test_health(client: TestClient):
     assert response.json() == {"status": "ok"}
 
 
-def test_create_embedding_single_text(client: TestClient):
+def test_create_embedding_single_text(client: TestClient, mock_manager_instance):
     """Test embedding generation for a single text input string."""
-    with patch("mlx_embeddings_server.main.get_embeddings") as mock_get_embeddings:
-        # Mock return: One input, which is a list of vectors (simulating ColBERT/ColQwen output)
-        # Structure: List[Input] -> List[Vectors] -> List[Float]
-        mock_get_embeddings.return_value = [[[0.1, 0.2], [0.3, 0.4]]]
+    mock_manager_instance.batching_engine.embed = AsyncMock(return_value=[[[0.1, 0.2], [0.3, 0.4]]])
 
-        payload = {"input": "This is a test", "model": "colqwen2.5"}
-        response = client.post("/v1/embeddings", json=payload)
+    payload = {"input": "This is a test", "model": "colqwen2.5"}
+    response = client.post("/v1/embeddings", json=payload)
 
-        assert response.status_code == 200
-        data = response.json()
+    assert response.status_code == 200
+    data = response.json()
 
-        assert data["object"] == "list"
-        assert len(data["data"]) == 1
-        assert data["model"] == "colqwen2.5"
+    assert data["object"] == "list"
+    assert len(data["data"]) == 1
+    assert data["model"] == "colqwen2.5"
 
-        # Check first embedding object
-        embed_obj = data["data"][0]
-        assert embed_obj["index"] == 0
-        assert embed_obj["object"] == "embedding"
-        assert embed_obj["embedding"] == [[0.1, 0.2], [0.3, 0.4]]
+    # Check first embedding object
+    embed_obj = data["data"][0]
+    assert embed_obj["index"] == 0
+    assert embed_obj["object"] == "embedding"
+    assert embed_obj["embedding"] == [[0.1, 0.2], [0.3, 0.4]]
 
-        # Verify backend call inputs
-        mock_get_embeddings.assert_called_once_with(["This is a test"])
+    # Verify backend call inputs
+    mock_manager_instance.batching_engine.embed.assert_called_once_with(["This is a test"])
 
 
-def test_create_embedding_batch_text(client: TestClient):
+def test_create_embedding_batch_text(client: TestClient, mock_manager_instance):
     """Test embedding generation for a list of inputs."""
-    with patch("mlx_embeddings_server.main.get_embeddings") as mock_get_embeddings:
-        # Mock return for 2 inputs
-        mock_get_embeddings.return_value = [
+    mock_manager_instance.batching_engine.embed = AsyncMock(
+        return_value=[
             [[0.1, 0.1]],  # Input 1
             [[0.2, 0.2]],  # Input 2
         ]
+    )
 
-        payload = {"input": ["Hello", "World"]}
-        response = client.post("/v1/embeddings", json=payload)
+    payload = {"input": ["Hello", "World"]}
+    response = client.post("/v1/embeddings", json=payload)
 
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data["data"]) == 2
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["data"]) == 2
 
-        assert data["data"][0]["index"] == 0
-        assert data["data"][0]["embedding"] == [[0.1, 0.1]]
+    assert data["data"][0]["index"] == 0
+    assert data["data"][0]["embedding"] == [[0.1, 0.1]]
 
-        assert data["data"][1]["index"] == 1
-        assert data["data"][1]["embedding"] == [[0.2, 0.2]]
+    assert data["data"][1]["index"] == 1
+    assert data["data"][1]["embedding"] == [[0.2, 0.2]]
 
-        mock_get_embeddings.assert_called_once_with(["Hello", "World"])
+    mock_manager_instance.batching_engine.embed.assert_called_once_with(["Hello", "World"])
 
 
 def test_create_embedding_validation_error(client: TestClient):
@@ -68,13 +65,13 @@ def test_create_embedding_validation_error(client: TestClient):
     assert response.status_code == 422
 
 
-def test_backend_exception_handling(client: TestClient):
+def test_backend_exception_handling(client: TestClient, mock_manager_instance):
     """Test that backend exceptions result in 500 errors."""
-    with patch("mlx_embeddings_server.main.get_embeddings", side_effect=Exception("Model failure")):
-        payload = {"input": "crash"}
-        response = client.post("/v1/embeddings", json=payload)
-        assert response.status_code == 500
-        assert "Model failure" in response.json()["detail"]
+    mock_manager_instance.batching_engine.embed = AsyncMock(side_effect=Exception("Model failure"))
+    payload = {"input": "crash"}
+    response = client.post("/v1/embeddings", json=payload)
+    assert response.status_code == 500
+    assert "Model failure" in response.json()["detail"]
 
 
 def test_create_embedding_model_not_found(client: TestClient):

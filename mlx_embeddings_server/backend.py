@@ -1,8 +1,11 @@
+import asyncio
 import base64
 import io
 import logging
 import os
+import threading
 from abc import ABC, abstractmethod
+from time import monotonic
 from typing import Any, List, Tuple
 
 import mlx.core as mx
@@ -143,8 +146,94 @@ class SigLIPModel(BaseModel):
         return results
 
 
+class BatchingEngine:
+    """
+    Coalesces concurrent embedding requests into single batched GPU calls.
+
+    Incoming requests enqueue ``(inputs, Future)`` pairs. A single background
+    asyncio task drains the queue, merges inputs from multiple requests into
+    one batch, calls the underlying model once per drain cycle, then resolves
+    each Future with its slice of the results.
+    """
+
+    def __init__(self, engine: "BaseModel", max_batch_size: int = 64, max_wait_ms: float = 20.0):
+        self._engine = engine
+        self._max_batch_size = max_batch_size
+        self._max_wait_ms = max_wait_ms
+        self._queue: asyncio.Queue = None  # initialised in start()
+
+    async def start(self) -> None:
+        """Run the drain loop. Launch this as an asyncio.Task."""
+        self._queue = asyncio.Queue()
+        logger.info(f"Batching engine started (max_batch_size={self._max_batch_size}, max_wait_ms={self._max_wait_ms})")
+        try:
+            while True:
+                await self._drain()
+        except asyncio.CancelledError:
+            logger.info("Batching engine stopped.")
+            raise
+
+    async def _drain(self) -> None:
+        """Wait for the first request, collect stragglers, run one inference call."""
+        # Block until at least one request arrives
+        first_inputs, first_future = await self._queue.get()
+
+        batch_inputs: List[str] = list(first_inputs)
+        # (future, result_start_index, result_end_index)
+        waiters: List[Tuple[asyncio.Future, int, int]] = [(first_future, 0, len(first_inputs))]
+        cursor = len(first_inputs)
+
+        # Collect additional items within max_wait_ms or until max_batch_size
+        deadline = monotonic() + self._max_wait_ms / 1000.0
+        while cursor < self._max_batch_size:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                break
+            try:
+                inputs, fut = self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                # Yield to let other coroutines enqueue, then check again
+                await asyncio.sleep(0)
+                try:
+                    inputs, fut = self._queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    remaining2 = deadline - monotonic()
+                    if remaining2 <= 0:
+                        break
+                    await asyncio.sleep(min(remaining2, 0.005))
+                    continue
+            batch_inputs.extend(inputs)
+            waiters.append((fut, cursor, cursor + len(inputs)))
+            cursor += len(inputs)
+
+        # Run inference in a thread (one call at a time — Metal serialises anyway)
+        from fastapi.concurrency import run_in_threadpool
+
+        try:
+            results = await run_in_threadpool(self._engine.get_embeddings, batch_inputs)
+        except Exception as exc:
+            for fut, _, _ in waiters:
+                if not fut.done():
+                    fut.set_exception(exc)
+            return
+
+        for fut, s, e in waiters:
+            if not fut.done():
+                fut.set_result(results[s:e])
+
+    async def embed(self, inputs: List[str]) -> List[Any]:
+        """Enqueue *inputs* and await their embeddings."""
+        if self._queue is None:
+            raise RuntimeError("BatchingEngine has not been started. Call start() first.")
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future = loop.create_future()
+        await self._queue.put((inputs, future))
+        return await future
+
+
 class ModelManager:
     _instance = None
+    _lock = threading.Lock()
 
     def __init__(self):
         self.model_id = os.getenv("MODEL_ID")
@@ -161,18 +250,24 @@ class ModelManager:
         if model_type == "siglip":
             self.engine = SigLIPModel(model, processor)
         else:
-            # Defaulting to ColQwen for other types for now, or we can be more specific
             self.engine = ColQwenModel(model, processor)
+
+        max_batch_size = int(os.getenv("BATCH_MAX_SIZE", "64"))
+        max_wait_ms = float(os.getenv("BATCH_MAX_WAIT_MS", "20"))
+        self.batching_engine = BatchingEngine(self.engine, max_batch_size, max_wait_ms)
 
         logger.info(f"Loading model: {self.model_id} [COMPLETED]")
 
     @classmethod
-    def get_instance(cls):
+    def get_instance(cls) -> "ModelManager":
         if cls._instance is None:
-            cls._instance = cls()
+            with cls._lock:
+                if cls._instance is None:  # double-checked locking
+                    cls._instance = cls()
         return cls._instance
 
 
 def get_embeddings(inputs: List[str]) -> List[Any]:
+    """Synchronous helper retained for tests and direct tooling use."""
     manager = ModelManager.get_instance()
     return manager.engine.get_embeddings(inputs)
