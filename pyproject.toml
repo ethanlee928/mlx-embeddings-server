@@ -37,6 +37,11 @@ dev = [
     "testcontainers>=4.14.0",
 ]
 
+[tool.pytest.ini_options]
+markers = [
+    "anyio: run async test with anyio",
+]
+
 [tool.ruff]
 line-length = 120
 target-version = "py312"

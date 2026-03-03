@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -7,14 +7,20 @@ from mlx_embeddings_server.main import app
 
 
 @pytest.fixture
-def client():
+def mock_manager_instance():
+    """A pre-configured ModelManager mock with async batching_engine stubs."""
+    mock_instance = MagicMock()
+    mock_instance.model_id = "colqwen2.5"
+    mock_instance.batching_engine.start = AsyncMock()  # returns immediately instead of looping
+    mock_instance.batching_engine.embed = AsyncMock(return_value=[])  # overridden per test
+    return mock_instance
+
+
+@pytest.fixture
+def client(mock_manager_instance):
     # Patch ModelManager used in main.py lifespan to avoid loading the model during tests
     with patch("mlx_embeddings_server.main.ModelManager") as MockManager:
-        # Configure the mock to return a dummy instance if needed,
-        # though lifespan only calls get_instance()
-        mock_instance = MagicMock()
-        mock_instance.model_id = "colqwen2.5"
-        MockManager.get_instance.return_value = mock_instance
+        MockManager.get_instance.return_value = mock_manager_instance
 
         with TestClient(app) as c:
             yield c
