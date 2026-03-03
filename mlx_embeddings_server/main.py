@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import copy
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -20,6 +21,43 @@ from mlx_embeddings_server.schemas import (
 )
 
 logger = logging.getLogger("uvicorn.error")
+
+# ---------------------------------------------------------------------------
+# Uvicorn log config with timestamps
+# ---------------------------------------------------------------------------
+LOG_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {
+            "format": "%(asctime)s %(levelprefix)s %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+            "()": "uvicorn.logging.DefaultFormatter",
+        },
+        "access": {
+            "format": '%(asctime)s %(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s',
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+            "()": "uvicorn.logging.AccessFormatter",
+        },
+    },
+    "handlers": {
+        "default": {
+            "formatter": "default",
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stderr",
+        },
+        "access": {
+            "formatter": "access",
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+        },
+    },
+    "loggers": {
+        "uvicorn": {"handlers": ["default"], "level": "INFO", "propagate": False},
+        "uvicorn.error": {"level": "INFO"},
+        "uvicorn.access": {"handlers": ["access"], "level": "INFO", "propagate": False},
+    },
+}
 
 
 @asynccontextmanager
@@ -141,12 +179,18 @@ def start():
     os.environ["BATCH_MAX_SIZE"] = str(args.max_batch_size)
     os.environ["BATCH_MAX_WAIT_MS"] = str(args.max_wait_ms)
 
+    log_config = copy.deepcopy(LOG_CONFIG)
+    log_config["loggers"]["uvicorn"]["level"] = args.log_level.upper()
+    log_config["loggers"]["uvicorn.error"]["level"] = args.log_level.upper()
+    log_config["loggers"]["uvicorn.access"]["level"] = args.log_level.upper()
+
     uvicorn.run(
         "mlx_embeddings_server.main:app",
         host=args.host,
         port=args.port,
         workers=args.workers,
         log_level=args.log_level,
+        log_config=log_config,
     )
 
 

@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import concurrent.futures
 import io
 import logging
 import os
@@ -90,6 +91,7 @@ class ColQwenModel(BaseModel):
 
             proc_out = self.model(input_ids=text_input_ids)
             embeds_list = proc_out.text_embeds.tolist()
+            mx.eval()  # ensure Metal command buffers are fully retired
 
             for i, embed in zip(text_indices, embeds_list):
                 results[i] = embed
@@ -108,6 +110,7 @@ class ColQwenModel(BaseModel):
             proc_out = self.model(input_ids=image_input_ids, pixel_values=pixel_values, image_grid_thw=image_grid_thw)
 
             embeds_list = proc_out.image_embeds.tolist()
+            mx.eval()  # ensure Metal command buffers are fully retired
 
             for i, embed in zip(image_indices, embeds_list):
                 results[i] = embed
@@ -127,6 +130,7 @@ class SigLIPModel(BaseModel):
             # Standard MLX model usage for embeddings
             proc_out = self.model.get_text_features(input_ids=text_input_ids)
             embeds_list = proc_out.tolist()
+            mx.eval()  # ensure Metal command buffers are fully retired
 
             for i, embed in zip(text_indices, embeds_list):
                 results[i] = embed
@@ -139,6 +143,7 @@ class SigLIPModel(BaseModel):
 
             proc_out = self.model.get_image_features(pixel_values=pixel_values)
             embeds_list = proc_out.tolist()
+            mx.eval()  # ensure Metal command buffers are fully retired
 
             for i, embed in zip(image_indices, embeds_list):
                 results[i] = embed
@@ -161,6 +166,9 @@ class BatchingEngine:
         self._max_batch_size = max_batch_size
         self._max_wait_ms = max_wait_ms
         self._queue: asyncio.Queue = None  # initialised in start()
+        # Pin all Metal / MLX work to a single OS thread to prevent
+        # cross-thread command-buffer conflicts that cause SIGABRT.
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="mlx-inference")
 
     async def start(self) -> None:
         """Run the drain loop. Launch this as an asyncio.Task."""
@@ -206,11 +214,11 @@ class BatchingEngine:
             waiters.append((fut, cursor, cursor + len(inputs)))
             cursor += len(inputs)
 
-        # Run inference in a thread (one call at a time — Metal serialises anyway)
-        from fastapi.concurrency import run_in_threadpool
-
+        # Run inference on a dedicated thread — Metal serialises anyway, and
+        # keeping the same OS thread avoids MTLCommandBuffer state conflicts.
+        loop = asyncio.get_running_loop()
         try:
-            results = await run_in_threadpool(self._engine.get_embeddings, batch_inputs)
+            results = await loop.run_in_executor(self._executor, self._engine.get_embeddings, batch_inputs)
         except Exception as exc:
             for fut, _, _ in waiters:
                 if not fut.done():
